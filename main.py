@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from googletrans import Translator, LANGUAGES
+import re
 
 
 class WordGame(tk.Tk):
@@ -44,7 +45,7 @@ class WordGame(tk.Tk):
     def _load_words(self):
         """
         Load word list from CSV file.
-        Returns list of dicts with 'en', 'tr', 'en_pron', 'learned' keys.
+        Returns list of dicts with 'en', 'tr', 'en_pron', 'tr_pron', 'learned' keys.
         """
         words = []
         try:
@@ -55,6 +56,7 @@ class WordGame(tk.Tk):
                         "en": row["english"].strip(),
                         "tr": row["turkish"].strip(),
                         "en_pron": row["english_pron"].strip(),
+                        "tr_pron": row.get("turkish_pron", "").strip(),
                         "learned": int(row["learned"].strip())
                     })
         except FileNotFoundError:
@@ -65,7 +67,7 @@ class WordGame(tk.Tk):
     async def _import_from_mylist(self):
         """
         Read English words from mylist.txt (one per line), translate to Turkish using googletrans,
-        check for duplicates, and append new entries to self.words and CSV with learned=0, en_pron=''.
+        check for duplicates, and append new entries to self.words and CSV with learned=0, en_pron='', tr_pron=''.
         Runs only if mylist.txt exists.
         """
         mylist_path = "mylist.txt"
@@ -89,6 +91,7 @@ class WordGame(tk.Tk):
                             "en": en_word,
                             "tr": tr_word,
                             "en_pron": "",
+                            "tr_pron": "",
                             "learned": 0
                         }
                         new_words.append(new_entry)
@@ -110,7 +113,7 @@ class WordGame(tk.Tk):
         """
         try:
             with open("data/words_2000.csv", "w", newline="", encoding="utf-8") as file:
-                fieldnames = ["english", "turkish", "english_pron", "learned"]
+                fieldnames = ["english", "turkish", "english_pron", "turkish_pron", "learned"]
                 writer = csv.DictWriter(file, fieldnames=fieldnames)
                 writer.writeheader()
                 for w in self.words:
@@ -118,6 +121,7 @@ class WordGame(tk.Tk):
                         "english": w["en"],
                         "turkish": w["tr"],
                         "english_pron": w["en_pron"],
+                        "turkish_pron": w.get("tr_pron", ""),
                         "learned": w["learned"]
                     })
         except IOError:
@@ -128,6 +132,7 @@ class WordGame(tk.Tk):
         Set up the GUI elements using ttk for modern appearance.
         Passive review: no input, show source word/pron (English only), reveal answer on button.
         Add "I Learned It" button for manual marking.
+        Add "Pronunciation" button to fetch/show pronunciation if missing.
         """
         # Main frame
         main_frame = ttk.Frame(self, padding="20")
@@ -146,11 +151,15 @@ class WordGame(tk.Tk):
         mode_combo.grid(row=0, column=1)
         mode_combo.bind("<<ComboboxSelected>>", self._toggle_mode)
 
-        # Current word display
-        self.word_label = ttk.Label(main_frame, text="Word will appear here", font=("Arial", 14), foreground="blue")
-        self.word_label.grid(row=2, column=0, columnspan=3, pady=(0, 5))
+        # Word display frame
+        word_frame = ttk.Frame(main_frame)
+        word_frame.grid(row=2, column=0, columnspan=3, pady=(0, 5))
+        self.word_label = ttk.Label(word_frame, text="Word will appear here", font=("Arial", 14), foreground="blue")
+        self.word_label.grid(row=0, column=0, sticky='w')
+        self.pron_button = ttk.Button(word_frame, text="Get Pronunciation", command=self._get_pronunciation)
+        self.pron_button.grid(row=0, column=1, padx=(10, 0))
 
-        # Source pronunciation (English only)
+        # Source pronunciation
         self.pron_label = ttk.Label(main_frame, text="", font=("Arial", 12, "italic"), foreground="green")
         self.pron_label.grid(row=3, column=0, columnspan=3, pady=(0, 10))
 
@@ -204,7 +213,7 @@ class WordGame(tk.Tk):
 
     def _load_new_word(self):
         """
-        Load a random unknown word and display source word/pron (English only).
+        Load a random unknown word and display source word/pron.
         No auto-marking; manual via button.
         """
         unknown = self._get_unknown_words()
@@ -222,19 +231,31 @@ class WordGame(tk.Tk):
         self.learned_button.config(state="disabled")
         self.show_answer_button.config(state="normal")
 
-        display_pron_text = ""
-        answer_pron_text = ""
+        # Set pronunciation button state
+        source_pron_key = "en_pron" if self.mode == "en_to_tr" else "tr_pron"
+        if self.current_word[source_pron_key]:
+            self.pron_button.config(text="Pronunciation", state="disabled")
+        else:
+            self.pron_button.config(text="Get Pronunciation", state="normal")
 
         if self.mode == "en_to_tr":
             display_text = self.current_word["en"]
-            display_pron_text = f"Pronunciation: {self.current_word['en_pron']}"
+            display_pron_text = self.current_word["en_pron"] if self.current_word["en_pron"] else ""
+            if display_pron_text:
+                display_pron_text = f"Pronunciation: {display_pron_text}"
             answer_text = self.current_word["tr"]
-            # No Turkish pron
+            answer_pron_text = self.current_word["tr_pron"] if self.current_word["tr_pron"] else ""
+            if answer_pron_text:
+                answer_pron_text = f"Pronunciation: {answer_pron_text}"
         else:
             display_text = self.current_word["tr"]
-            # No Turkish pron
+            display_pron_text = self.current_word["tr_pron"] if self.current_word["tr_pron"] else ""
+            if display_pron_text:
+                display_pron_text = f"Pronunciation: {display_pron_text}"
             answer_text = self.current_word["en"]
-            answer_pron_text = f"Pronunciation: {self.current_word['en_pron']}"
+            answer_pron_text = self.current_word["en_pron"] if self.current_word["en_pron"] else ""
+            if answer_pron_text:
+                answer_pron_text = f"Pronunciation: {answer_pron_text}"
 
         self.word_label.config(text=display_text)
         self.pron_label.config(text=display_pron_text)
@@ -242,6 +263,99 @@ class WordGame(tk.Tk):
         self.answer_pron_label.config(text=answer_pron_text)
 
         self._update_progress_display()
+
+    def _get_pronunciation(self):
+        """
+        Fetch pronunciation for the source word if missing, update CSV, and display.
+        """
+        if not self.current_word:
+            return
+        source_pron_key = "en_pron" if self.mode == "en_to_tr" else "tr_pron"
+        if self.current_word[source_pron_key]:
+            return  # Already have it
+
+        if self.mode == "en_to_tr":
+            pron = self._fetch_english_pron(self.current_word["en"])
+        else:
+            pron = self._fetch_turkish_pron(self.current_word["tr"])
+
+        if pron:
+            self.current_word[source_pron_key] = pron
+            self._save_words_to_csv()
+            display_pron_text = f"Pronunciation: {pron}"
+            self.pron_label.config(text=display_pron_text)
+            self.pron_button.config(text="Pronunciation", state="disabled")
+            messagebox.showinfo("Pronunciation Added", f"Pronunciation: {pron}")
+        else:
+            messagebox.showwarning("Failed", "Could not fetch pronunciation. For English words, install 'eng-to-ipa' library: pip install eng-to-ipa")
+
+    def _fetch_english_pron(self, word):
+        """
+        Fetch English pronunciation using eng_to_ipa if available, simplify to Turkish-style, and return.
+        """
+        try:
+            from eng_to_ipa import eng_to_ipa
+            ipa = eng_to_ipa(word, variant='american')
+            return self._simplify_english_pron(ipa)
+        except ImportError:
+            return None
+        except Exception:
+            return None
+
+    def _simplify_english_pron(self, ipa):
+        """
+        Simplify IPA to approximate Turkish-style pronunciation (e.g., 'ˈbɛrli' -> 'be-rli').
+        """
+        if not ipa:
+            return ""
+        ipa = ipa.strip('/').lower()
+
+        # Mapping common IPA to approximate Latin/Turkish letters
+        mapping = {
+            'ɑ': 'a', 'æ': 'e', 'ɒ': 'o', 'ʌ': 'a', 'ə': 'e',
+            'ɛ': 'e', 'ɜ': 'er', 'ɪ': 'i', 'i': 'i',
+            'ɔ': 'o', 'ʊ': 'u', 'u': 'u',
+            'ɡ': 'g', 'ŋ': 'ng', 'ʃ': 'sh', 'ʒ': 'j', 'θ': 't', 'ð': 'd',
+            'tʃ': 'ch', 'dʒ': 'j'
+        }
+        new_ipa = ''
+        i = 0
+        while i < len(ipa):
+            char = ipa[i]
+            if i + 1 < len(ipa) and ipa[i:i+2] in mapping:
+                new_ipa += mapping[ipa[i:i+2]]
+                i += 2
+            elif char in mapping:
+                new_ipa += mapping[char]
+                i += 1
+            else:
+                new_ipa += char
+                i += 1
+
+        # Remove stress marks
+        new_ipa = re.sub(r'[ˈˌ]', '', new_ipa)
+
+        # Replace spaces with hyphens
+        new_ipa = re.sub(r'\s+', '-', new_ipa)
+
+        # If no hyphen and long enough, add one in the middle
+        if '-' not in new_ipa and len(new_ipa) > 3:
+            mid = len(new_ipa) // 2
+            new_ipa = new_ipa[:mid] + '-' + new_ipa[mid:]
+
+        return new_ipa
+
+    def _fetch_turkish_pron(self, word):
+        """
+        Generate simple syllabic pronunciation for Turkish word (e.g., 'kitap' -> 'ki-tap').
+        """
+        if not word:
+            return ""
+        if len(word) <= 2:
+            return word
+        parts = [word[i:i+2] for i in range(0, len(word), 2)]
+        pron = '-'.join(part for part in parts if part)
+        return pron
 
     def _mark_learned_and_next(self):
         """
@@ -260,11 +374,11 @@ class WordGame(tk.Tk):
 
     def _show_answer(self):
         """
-        Reveal the translation and its pronunciation (English only if applicable).
+        Reveal the translation and its pronunciation (if applicable).
         Enable learned and next buttons.
         """
         self.answer_label.grid(row=0, column=0, columnspan=3)
-        if self.answer_pron_label.cget("text"):  # Only show if there's English pron
+        if self.answer_pron_label.cget("text"):  # Only show if there's pronunciation
             self.answer_pron_label.grid(row=1, column=0, columnspan=3, pady=(0, 5))
         self.show_answer_button.config(state="disabled")
         self.next_button.config(state="normal")
