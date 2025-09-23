@@ -7,6 +7,7 @@ from tkinter import ttk
 from tkinter import messagebox
 from googletrans import Translator, LANGUAGES
 import re
+from datetime import datetime
 
 
 class WordGame(tk.Tk):
@@ -42,6 +43,17 @@ class WordGame(tk.Tk):
         # Initial word load
         self._load_new_word()
 
+    def _log_error(self, message):
+        """
+        Log error message to errors.txt with timestamp.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with open("errors.txt", "a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] {message}\n")
+        except IOError as e:
+            print(f"Failed to log error to file: {e}")
+
     def _load_words(self):
         """
         Load word list from CSV file.
@@ -60,7 +72,9 @@ class WordGame(tk.Tk):
                         "learned": int(row["learned"].strip())
                     })
         except FileNotFoundError:
-            messagebox.showerror("Error", "data/words_2000.csv not found. Please add the file.")
+            error_msg = "data/words_2000.csv not found. Please add the file."
+            self._log_error(error_msg)
+            messagebox.showerror("Error", error_msg)
             self.quit()
         return words
 
@@ -97,7 +111,8 @@ class WordGame(tk.Tk):
                         new_words.append(new_entry)
                         existing_ens.add(en_word.lower())
                     except Exception as e:
-                        print(f"Translation error for '{en_word}': {e}")
+                        error_msg = f"Translation error for '{en_word}': {e}"
+                        self._log_error(error_msg)
                         messagebox.showwarning("Translation Error", f"Could not translate '{en_word}': {e}")
                         continue
 
@@ -106,7 +121,8 @@ class WordGame(tk.Tk):
                 self._save_words_to_csv()
                 messagebox.showinfo("Import Complete", f"Added {len(new_words)} new words from mylist.txt.")
         except IOError as e:
-            print(f"IOError reading mylist.txt: {e}")
+            error_msg = f"IOError reading mylist.txt: {e}"
+            self._log_error(error_msg)
             messagebox.showerror("File Error", f"Could not read mylist.txt: {e}")
 
     def _save_words_to_csv(self):
@@ -127,7 +143,8 @@ class WordGame(tk.Tk):
                         "learned": w["learned"]
                     })
         except IOError as e:
-            print(f"IOError saving to CSV: {e}")
+            error_msg = f"IOError saving to CSV: {e}"
+            self._log_error(error_msg)
             messagebox.showwarning("Warning", "Could not save to CSV.")
 
     def _setup_ui(self):
@@ -291,7 +308,7 @@ class WordGame(tk.Tk):
             messagebox.showinfo("Pronunciation Added", f"Pronunciation: {pron}")
         else:
             error_msg = error or "Could not fetch pronunciation."
-            print(f"Pronunciation fetch failed: {error_msg}")
+            self._log_error(f"Pronunciation fetch failed: {error_msg}")
             messagebox.showwarning("Failed", error_msg)
 
     def _fetch_english_pron(self, word):
@@ -306,11 +323,11 @@ class WordGame(tk.Tk):
             return pron, None
         except ImportError as e:
             error = "Please install 'eng-to-ipa' library: pip install eng-to-ipa"
-            print(f"ImportError in _fetch_english_pron for '{word}': {e}")
+            self._log_error(f"ImportError in _fetch_english_pron for '{word}': {e}")
             return None, error
         except Exception as e:
             error = f"Error fetching pronunciation for '{word}': {str(e)}"
-            print(f"Exception in _fetch_english_pron for '{word}': {e}")
+            self._log_error(f"Exception in _fetch_english_pron for '{word}': {e}")
             return None, error
 
     def _simplify_english_pron(self, ipa):
