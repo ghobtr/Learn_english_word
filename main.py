@@ -4,6 +4,7 @@ import random
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from googletrans import Translator, LANGUAGES
 
 
 class WordGame(tk.Tk):
@@ -13,6 +14,7 @@ class WordGame(tk.Tk):
     Passive review mode: displays word and pronunciation (English only), reveals translation on button press.
     Tracks reviewed (known) words via CSV 'learned' flag.
     Manual marking with "I Learned It" button.
+    Imports new words from mylist.txt with auto-translation on startup if file exists.
     """
 
     def __init__(self):
@@ -27,6 +29,7 @@ class WordGame(tk.Tk):
 
         # Load data
         self.words = self._load_words()
+        self._import_from_mylist()  # Import new words if mylist.txt exists
         self.current_word = None
         self.mode = "en_to_tr"  # Default: English to Turkish
         self.known_words = {w["en"] for w in self.words if w["learned"] == 1}
@@ -57,6 +60,48 @@ class WordGame(tk.Tk):
             messagebox.showerror("Error", "data/words_2000.csv not found. Please add the file.")
             self.quit()
         return words
+
+    def _import_from_mylist(self):
+        """
+        Read English words from mylist.txt (one per line), translate to Turkish using googletrans,
+        check for duplicates, and append new entries to self.words and CSV with learned=0, en_pron=''.
+        Runs only if mylist.txt exists.
+        """
+        mylist_path = "mylist.txt"
+        if not os.path.exists(mylist_path):
+            return
+
+        translator = Translator()
+        existing_ens = {w["en"].lower() for w in self.words}
+
+        try:
+            with open(mylist_path, "r", encoding="utf-8") as file:
+                new_words = []
+                for line in file:
+                    en_word = line.strip()
+                    if not en_word or en_word.lower() in existing_ens:
+                        continue  # Skip empty or duplicates
+                    try:
+                        translation = translator.translate(en_word, src='en', dest='tr')
+                        tr_word = translation.text.strip()
+                        new_entry = {
+                            "en": en_word,
+                            "tr": tr_word,
+                            "en_pron": "",
+                            "learned": 0
+                        }
+                        new_words.append(new_entry)
+                        existing_ens.add(en_word.lower())
+                    except Exception as e:
+                        messagebox.showwarning("Translation Error", f"Could not translate '{en_word}': {e}")
+                        continue
+
+            if new_words:
+                self.words.extend(new_words)
+                self._save_words_to_csv()
+                messagebox.showinfo("Import Complete", f"Added {len(new_words)} new words from mylist.txt.")
+        except IOError as e:
+            messagebox.showerror("File Error", f"Could not read mylist.txt: {e}")
 
     def _save_words_to_csv(self):
         """
