@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import os
 import random
@@ -29,7 +30,7 @@ class WordGame(tk.Tk):
 
         # Load data
         self.words = self._load_words()
-        self._import_from_mylist()  # Import new words if mylist.txt exists
+        asyncio.run(self._import_from_mylist())  # Import new words if mylist.txt exists
         self.current_word = None
         self.mode = "en_to_tr"  # Default: English to Turkish
         self.known_words = {w["en"] for w in self.words if w["learned"] == 1}
@@ -61,7 +62,7 @@ class WordGame(tk.Tk):
             self.quit()
         return words
 
-    def _import_from_mylist(self):
+    async def _import_from_mylist(self):
         """
         Read English words from mylist.txt (one per line), translate to Turkish using googletrans,
         check for duplicates, and append new entries to self.words and CSV with learned=0, en_pron=''.
@@ -82,7 +83,7 @@ class WordGame(tk.Tk):
                     if not en_word or en_word.lower() in existing_ens:
                         continue  # Skip empty or duplicates
                     try:
-                        translation = translator.translate(en_word, src='en', dest='tr')
+                        translation = await translator.translate(en_word, src='en', dest='tr')
                         tr_word = translation.text.strip()
                         new_entry = {
                             "en": en_word,
