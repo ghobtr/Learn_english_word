@@ -275,9 +275,9 @@ class WordGame(tk.Tk):
             return  # Already have it
 
         if self.mode == "en_to_tr":
-            pron = self._fetch_english_pron(self.current_word["en"])
+            pron, error = self._fetch_english_pron(self.current_word["en"])
         else:
-            pron = self._fetch_turkish_pron(self.current_word["tr"])
+            pron, error = self._fetch_turkish_pron(self.current_word["tr"])
 
         if pron:
             self.current_word[source_pron_key] = pron
@@ -287,20 +287,25 @@ class WordGame(tk.Tk):
             self.pron_button.config(text="Pronunciation", state="disabled")
             messagebox.showinfo("Pronunciation Added", f"Pronunciation: {pron}")
         else:
-            messagebox.showwarning("Failed", "Could not fetch pronunciation. For English words, install 'eng-to-ipa' library: pip install eng-to-ipa")
+            error_msg = error or "Could not fetch pronunciation."
+            messagebox.showwarning("Failed", error_msg)
 
     def _fetch_english_pron(self, word):
         """
-        Fetch English pronunciation using eng_to_ipa if available, simplify to Turkish-style, and return.
+        Fetch English pronunciation using eng_to_ipa if available, simplify to Turkish-style, and return (pron, error).
         """
+        error = None
         try:
             from eng_to_ipa import eng_to_ipa
             ipa = eng_to_ipa(word, variant='american')
-            return self._simplify_english_pron(ipa)
+            pron = self._simplify_english_pron(ipa)
+            return pron, None
         except ImportError:
-            return None
-        except Exception:
-            return None
+            error = "Please install 'eng-to-ipa' library: pip install eng-to-ipa"
+            return None, error
+        except Exception as e:
+            error = f"Error fetching pronunciation for '{word}': {str(e)}"
+            return None, error
 
     def _simplify_english_pron(self, ipa):
         """
@@ -350,12 +355,12 @@ class WordGame(tk.Tk):
         Generate simple syllabic pronunciation for Turkish word (e.g., 'kitap' -> 'ki-tap').
         """
         if not word:
-            return ""
+            return "", None
         if len(word) <= 2:
-            return word
+            return word, None
         parts = [word[i:i+2] for i in range(0, len(word), 2)]
         pron = '-'.join(part for part in parts if part)
-        return pron
+        return pron, None
 
     def _mark_learned_and_next(self):
         """
