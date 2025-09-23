@@ -11,7 +11,7 @@ class WordGame(tk.Tk):
     """
     Main GUI application for English-Turkish word translation game.
     Uses Tkinter with ttk for modern styling.
-    Passive review mode: displays word and pronunciation, reveals translation on button press.
+    Passive review mode: displays word and pronunciation (English only), reveals translation on button press.
     Tracks reviewed (known) words.
     """
 
@@ -42,7 +42,7 @@ class WordGame(tk.Tk):
     def _load_words(self):
         """
         Load word list from CSV file.
-        Returns list of dicts with 'en', 'tr', 'en_pron', 'tr_pron' keys.
+        Returns list of dicts with 'en', 'tr', 'en_pron' keys.
         """
         words = []
         try:
@@ -52,8 +52,7 @@ class WordGame(tk.Tk):
                     words.append({
                         "en": row["english"].strip(),
                         "tr": row["turkish"].strip(),
-                        "en_pron": row["english_pron"].strip(),
-                        "tr_pron": row["turkish_pron"].strip()
+                        "en_pron": row["english_pron"].strip()
                     })
         except FileNotFoundError:
             messagebox.showerror("Error", "data/words_2000.csv not found. Please add the file.")
@@ -87,7 +86,7 @@ class WordGame(tk.Tk):
     def _setup_ui(self):
         """
         Set up the GUI elements using ttk for modern appearance.
-        Passive review: no input, show source word/pron, reveal answer on button.
+        Passive review: no input, show source word/pron (English only), reveal answer on button.
         """
         # Main frame
         main_frame = ttk.Frame(self, padding="20")
@@ -110,7 +109,7 @@ class WordGame(tk.Tk):
         self.word_label = ttk.Label(main_frame, text="Word will appear here", font=("Arial", 14), foreground="blue")
         self.word_label.grid(row=2, column=0, columnspan=2, pady=(0, 5))
 
-        # Source pronunciation
+        # Source pronunciation (English only)
         self.pron_label = ttk.Label(main_frame, text="", font=("Arial", 12, "italic"), foreground="green")
         self.pron_label.grid(row=3, column=0, columnspan=2, pady=(0, 10))
 
@@ -161,7 +160,7 @@ class WordGame(tk.Tk):
 
     def _load_new_word(self):
         """
-        Load a random unknown word and display source word/pron.
+        Load a random unknown word and display source word/pron (English only).
         Mark previous word as known if applicable.
         """
         if self.current_word and self.current_word["en"] not in self.known_words:
@@ -180,30 +179,34 @@ class WordGame(tk.Tk):
         self.next_button.config(state="disabled")
         self.show_answer_button.config(state="normal")
 
+        display_pron_text = ""
+        answer_pron_text = ""
+
         if self.mode == "en_to_tr":
             display_text = self.current_word["en"]
-            display_pron = self.current_word["en_pron"]
+            display_pron_text = f"Pronunciation: {self.current_word['en_pron']}"
             answer_text = self.current_word["tr"]
-            answer_pron = self.current_word["tr_pron"]
+            # No Turkish pron
         else:
             display_text = self.current_word["tr"]
-            display_pron = self.current_word["tr_pron"]
+            # No Turkish pron
             answer_text = self.current_word["en"]
-            answer_pron = self.current_word["en_pron"]
+            answer_pron_text = f"Pronunciation: {self.current_word['en_pron']}"
 
         self.word_label.config(text=display_text)
-        self.pron_label.config(text=f"Pronunciation: {display_pron}")
+        self.pron_label.config(text=display_pron_text)
         self.answer_label.config(text=answer_text)
-        self.answer_pron_label.config(text=f"Pronunciation: {answer_pron}")
+        self.answer_pron_label.config(text=answer_pron_text)
 
         self._update_progress_display()
 
     def _show_answer(self):
         """
-        Reveal the translation and its pronunciation.
+        Reveal the translation and its pronunciation (English only if applicable).
         """
         self.answer_label.grid(row=0, column=0, columnspan=2)
-        self.answer_pron_label.grid(row=1, column=0, columnspan=2, pady=(0, 5))
+        if self.answer_pron_label.cget("text"):  # Only show if there's English pron
+            self.answer_pron_label.grid(row=1, column=0, columnspan=2, pady=(0, 5))
         self.show_answer_button.config(state="disabled")
         self.next_button.config(state="normal")
 
