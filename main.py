@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import random
 import tkinter as tk
@@ -12,7 +11,8 @@ class WordGame(tk.Tk):
     Main GUI application for English-Turkish word translation game.
     Uses Tkinter with ttk for modern styling.
     Passive review mode: displays word and pronunciation (English only), reveals translation on button press.
-    Tracks reviewed (known) words.
+    Tracks reviewed (known) words via CSV 'learned' flag.
+    Manual marking with "I Learned It" button.
     """
 
     def __init__(self):
@@ -27,11 +27,9 @@ class WordGame(tk.Tk):
 
         # Load data
         self.words = self._load_words()
-        self.progress_file = "storage/progress.json"
-        os.makedirs("storage", exist_ok=True)
-        self.known_words = self._load_progress()
         self.current_word = None
         self.mode = "en_to_tr"  # Default: English to Turkish
+        self.known_words = {w["en"] for w in self.words if w["learned"] == 1}
 
         # UI Setup
         self._setup_ui()
@@ -42,7 +40,7 @@ class WordGame(tk.Tk):
     def _load_words(self):
         """
         Load word list from CSV file.
-        Returns list of dicts with 'en', 'tr', 'en_pron' keys.
+        Returns list of dicts with 'en', 'tr', 'en_pron', 'learned' keys.
         """
         words = []
         try:
@@ -52,41 +50,38 @@ class WordGame(tk.Tk):
                     words.append({
                         "en": row["english"].strip(),
                         "tr": row["turkish"].strip(),
-                        "en_pron": row["english_pron"].strip()
+                        "en_pron": row["english_pron"].strip(),
+                        "learned": int(row["learned"].strip())
                     })
         except FileNotFoundError:
             messagebox.showerror("Error", "data/words_2000.csv not found. Please add the file.")
             self.quit()
         return words
 
-    def _load_progress(self):
+    def _save_words_to_csv(self):
         """
-        Load known words from JSON progress file.
-        Returns set of English words that are reviewed/mastered.
-        """
-        if os.path.exists(self.progress_file):
-            try:
-                with open(self.progress_file, "r", encoding="utf-8") as file:
-                    data = json.load(file)
-                    return set(data)
-            except (json.JSONDecodeError, KeyError):
-                pass
-        return set()
-
-    def _save_progress(self):
-        """
-        Save known words to JSON progress file.
+        Save words list back to CSV file with learned flags.
         """
         try:
-            with open(self.progress_file, "w", encoding="utf-8") as file:
-                json.dump(list(self.known_words), file, ensure_ascii=False, indent=4)
+            with open("data/words_2000.csv", "w", newline="", encoding="utf-8") as file:
+                fieldnames = ["english", "turkish", "english_pron", "learned"]
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                writer.writeheader()
+                for w in self.words:
+                    writer.writerow({
+                        "english": w["en"],
+                        "turkish": w["tr"],
+                        "english_pron": w["en_pron"],
+                        "learned": w["learned"]
+                    })
         except IOError:
-            messagebox.showwarning("Warning", "Could not save progress.")
+            messagebox.showwarning("Warning", "Could not save to CSV.")
 
     def _setup_ui(self):
         """
         Set up the GUI elements using ttk for modern appearance.
         Passive review: no input, show source word/pron (English only), reveal answer on button.
+        Add "I Learned It" button for manual marking.
         """
         # Main frame
         main_frame = ttk.Frame(self, padding="20")
@@ -94,12 +89,12 @@ class WordGame(tk.Tk):
 
         # Title
         title_label = ttk.Label(main_frame, text="English ↔ Turkish Word Review", font=("Arial", 16, "bold"))
-        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
 
         # Mode toggle
         self.mode_var = tk.StringVar(value="English to Turkish")
         mode_frame = ttk.Frame(main_frame)
-        mode_frame.grid(row=1, column=0, columnspan=2, pady=(0, 10))
+        mode_frame.grid(row=1, column=0, columnspan=3, pady=(0, 10))
         ttk.Label(mode_frame, text="Mode:").grid(row=0, column=0, padx=(0, 5))
         mode_combo = ttk.Combobox(mode_frame, textvariable=self.mode_var, values=["English to Turkish", "Turkish to English"], state="readonly", width=20)
         mode_combo.grid(row=0, column=1)
@@ -107,37 +102,40 @@ class WordGame(tk.Tk):
 
         # Current word display
         self.word_label = ttk.Label(main_frame, text="Word will appear here", font=("Arial", 14), foreground="blue")
-        self.word_label.grid(row=2, column=0, columnspan=2, pady=(0, 5))
+        self.word_label.grid(row=2, column=0, columnspan=3, pady=(0, 5))
 
         # Source pronunciation (English only)
         self.pron_label = ttk.Label(main_frame, text="", font=("Arial", 12, "italic"), foreground="green")
-        self.pron_label.grid(row=3, column=0, columnspan=2, pady=(0, 10))
+        self.pron_label.grid(row=3, column=0, columnspan=3, pady=(0, 10))
 
         # Answer section (initially hidden)
         answer_frame = ttk.Frame(main_frame)
-        answer_frame.grid(row=4, column=0, columnspan=2, pady=(0, 10))
+        answer_frame.grid(row=4, column=0, columnspan=3, pady=(0, 10))
         self.answer_label = ttk.Label(answer_frame, text="", font=("Arial", 14), foreground="red")
-        self.answer_label.grid(row=0, column=0, columnspan=2)
+        self.answer_label.grid(row=0, column=0, columnspan=3)
         self.answer_pron_label = ttk.Label(answer_frame, text="", font=("Arial", 12, "italic"), foreground="green")
-        self.answer_pron_label.grid(row=1, column=0, columnspan=2, pady=(0, 5))
+        self.answer_pron_label.grid(row=1, column=0, columnspan=3, pady=(0, 5))
 
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=5, column=0, columnspan=2, pady=(0, 20))
+        button_frame.grid(row=5, column=0, columnspan=3, pady=(0, 20))
 
         self.show_answer_button = ttk.Button(button_frame, text="Show Answer", command=self._show_answer)
-        self.show_answer_button.grid(row=0, column=0, padx=(0, 10))
+        self.show_answer_button.grid(row=0, column=0, padx=(0, 5))
+
+        self.learned_button = ttk.Button(button_frame, text="I Learned It", command=self._mark_learned_and_next, state="disabled")
+        self.learned_button.grid(row=0, column=1, padx=(0, 5))
 
         self.next_button = ttk.Button(button_frame, text="Next Word", command=self._load_new_word, state="disabled")
-        self.next_button.grid(row=0, column=1)
+        self.next_button.grid(row=0, column=2)
 
         # Progress display
         self.progress_label = ttk.Label(main_frame, text="Known Words: 0 | Remaining: 0", font=("Arial", 10))
-        self.progress_label.grid(row=6, column=0, columnspan=2)
+        self.progress_label.grid(row=6, column=0, columnspan=3)
 
         # Quit button
         quit_button = ttk.Button(main_frame, text="Quit", command=self.quit)
-        quit_button.grid(row=7, column=0, columnspan=2, pady=(20, 0))
+        quit_button.grid(row=7, column=0, columnspan=3, pady=(20, 0))
 
         # Initially hide answer
         self._hide_answer()
@@ -154,29 +152,28 @@ class WordGame(tk.Tk):
 
     def _get_unknown_words(self):
         """
-        Get list of words not yet known (for review).
+        Get list of words not yet learned (learned == 0) for review.
         """
-        return [w for w in self.words if w["en"] not in self.known_words]
+        return [w for w in self.words if w["learned"] == 0]
 
     def _load_new_word(self):
         """
         Load a random unknown word and display source word/pron (English only).
-        Mark previous word as known if applicable.
+        No auto-marking; manual via button.
         """
-        if self.current_word and self.current_word["en"] not in self.known_words:
-            self.known_words.add(self.current_word["en"])
-            self._save_progress()
-
         unknown = self._get_unknown_words()
         if not unknown:
             messagebox.showinfo("Complete!", "You've reviewed all words! Restarting progress.")
+            for w in self.words:
+                w["learned"] = 0
             self.known_words.clear()
-            self._save_progress()
+            self._save_words_to_csv()
             unknown = self.words
 
         self.current_word = random.choice(unknown)
         self._hide_answer()
         self.next_button.config(state="disabled")
+        self.learned_button.config(state="disabled")
         self.show_answer_button.config(state="normal")
 
         display_pron_text = ""
@@ -200,15 +197,32 @@ class WordGame(tk.Tk):
 
         self._update_progress_display()
 
+    def _mark_learned_and_next(self):
+        """
+        Mark current word as learned (set flag=1 in CSV), update known_words, save, then load next.
+        """
+        if not self.current_word:
+            return
+        en_word = self.current_word["en"]
+        for w in self.words:
+            if w["en"] == en_word:
+                w["learned"] = 1
+                break
+        self.known_words.add(en_word)
+        self._save_words_to_csv()
+        self._load_new_word()
+
     def _show_answer(self):
         """
         Reveal the translation and its pronunciation (English only if applicable).
+        Enable learned and next buttons.
         """
-        self.answer_label.grid(row=0, column=0, columnspan=2)
+        self.answer_label.grid(row=0, column=0, columnspan=3)
         if self.answer_pron_label.cget("text"):  # Only show if there's English pron
-            self.answer_pron_label.grid(row=1, column=0, columnspan=2, pady=(0, 5))
+            self.answer_pron_label.grid(row=1, column=0, columnspan=3, pady=(0, 5))
         self.show_answer_button.config(state="disabled")
         self.next_button.config(state="normal")
+        self.learned_button.config(state="normal")
 
     def _hide_answer(self):
         """
@@ -223,8 +237,8 @@ class WordGame(tk.Tk):
         Update the known words and remaining display.
         """
         known_count = len(self.known_words)
-        total_unknown = len(self._get_unknown_words())
-        self.progress_label.config(text=f"Known: {known_count} | Remaining: {total_unknown}")
+        remaining_count = len(self._get_unknown_words())
+        self.progress_label.config(text=f"Known: {known_count} | Remaining: {remaining_count}")
 
 
 if __name__ == "__main__":
