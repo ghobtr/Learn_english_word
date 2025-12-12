@@ -318,7 +318,7 @@ class WordGame(tk.Tk):
         error = None
         try:
             import eng_to_ipa
-            ipa = eng_to_ipa.convert(word, variant='american')
+            ipa = eng_to_ipa.convert(word)
             pron = self._simplify_english_pron(ipa)
             return pron, None
         except ImportError as e:
